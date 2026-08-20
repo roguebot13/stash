@@ -3,10 +3,11 @@ import "server-only";
 import { Resend } from "resend";
 
 import { PasswordResetEmail } from "@/emails/password-reset-email";
+import { VerifyEmail } from "@/emails/verify-email";
 import { WelcomeEmail } from "@/emails/welcome-email";
 import { getServerEnv } from "@/lib/env";
 
-type EmailKind = "welcome" | "password-reset";
+type EmailKind = "welcome" | "password-reset" | "email-verification";
 
 function sanitizeEmailError(error: unknown) {
   if (error && typeof error === "object") {
@@ -58,6 +59,23 @@ export async function sendWelcomeEmail(to: string, userId: string) {
       text: `Welcome to Stash. Save and manage your bookmarks in one place. Open Stash: ${env.APP_URL}/`,
     },
     `welcome-user/${userId}`,
+  );
+}
+
+export async function sendVerificationEmail(to: string, token: string, tokenId: string) {
+  const env = getServerEnv();
+  const verificationUrl = `${env.APP_URL}/verify-email?token=${encodeURIComponent(token)}`;
+  return deliver(
+    "email-verification",
+    tokenId,
+    {
+      from: env.EMAIL_FROM,
+      to,
+      subject: "Verify your Stash email",
+      react: <VerifyEmail verificationUrl={verificationUrl} />,
+      text: `Verify your Stash email: ${verificationUrl}\n\nThis link expires in 24 hours and can be used once. If you did not create a Stash account, ignore this email.`,
+    },
+    `email-verification/${tokenId}`,
   );
 }
 

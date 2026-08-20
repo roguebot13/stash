@@ -4,7 +4,11 @@ const { sendMock } = vi.hoisted(() => ({ sendMock: vi.fn() }));
 vi.mock("resend", () => ({ Resend: class { emails = { send: sendMock }; } }));
 
 import { resetEnvCacheForTests } from "@/lib/env";
-import { sendPasswordResetEmail, sendWelcomeEmail } from "@/lib/mail";
+import {
+  sendPasswordResetEmail,
+  sendVerificationEmail,
+  sendWelcomeEmail,
+} from "@/lib/mail";
 
 describe("mail helpers", () => {
   beforeEach(() => {
@@ -38,6 +42,22 @@ describe("mail helpers", () => {
     expect(payload.react.props.resetUrl).toBe("https://stash.example/reset-password?token=abc_DEF-123");
     expect(payload.text).toContain("expires in 60 minutes");
     expect(options).toEqual({ idempotencyKey: "password-reset/token-row-1" });
+  });
+
+  it("sends verification content and token-row idempotency", async () => {
+    sendMock.mockResolvedValue({ data: { id: "email-3" }, error: null });
+    await sendVerificationEmail("person@example.com", "abc_DEF-123", "verification-row-1");
+    const [payload, options] = sendMock.mock.calls[0];
+    expect(payload).toMatchObject({
+      from: "Stash <hello@stash.example>",
+      to: "person@example.com",
+      subject: "Verify your Stash email",
+    });
+    expect(payload.react.props.verificationUrl).toBe(
+      "https://stash.example/verify-email?token=abc_DEF-123",
+    );
+    expect(payload.text).toContain("expires in 24 hours");
+    expect(options).toEqual({ idempotencyKey: "email-verification/verification-row-1" });
   });
 
   it("treats a returned Resend error as failure", async () => {

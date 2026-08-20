@@ -23,8 +23,8 @@ describe.skipIf(!hasIsolatedDatabase)("bookmark database flows", () => {
     await db.bookmark.deleteMany();
     await db.user.deleteMany();
     const [alice, bob] = await Promise.all([
-      db.user.create({ data: { email: "alice@example.com", passwordHash: "unused" }, select: { id: true } }),
-      db.user.create({ data: { email: "bob@example.com", passwordHash: "unused" }, select: { id: true } }),
+      db.user.create({ data: { email: "alice@example.com", passwordHash: "unused", emailVerifiedAt: new Date() }, select: { id: true } }),
+      db.user.create({ data: { email: "bob@example.com", passwordHash: "unused", emailVerifiedAt: new Date() }, select: { id: true } }),
     ]);
     aliceId = alice.id;
     bobId = bob.id;

@@ -26,6 +26,7 @@ button, input, textarea { font: inherit; }
 .field-hint { font-size: 12px; margin: 0; }
 .form-status { min-height: 1.35em; color: #9b2924; font-size: 14px; line-height: 1.45; }
 .form-status.success { color: #24683d; }
+.form-help { color: var(--muted); font-size: 13px; margin: -6px 0 0; text-align: center; }
 .primary-button, .secondary-button { border: 0; border-radius: 10px; cursor: pointer; font-weight: 700; padding: 13px 18px; }
 .primary-button { background: var(--foreground); color: #fff; }
 .primary-button:hover { background: #403d37; }
@@ -33,6 +34,7 @@ button, input, textarea { font: inherit; }
 .secondary-button { background: #fff; border: 1px solid var(--border); color: var(--foreground); }
 .auth-footer { border-top: 1px solid var(--border); font-size: 14px; margin-top: 30px; padding-top: 24px; text-align: center; }
 .auth-footer p { margin: 0; }
+.auth-footer p + p { margin-top: 10px; }
 .notice { border-radius: 10px; font-size: 14px; line-height: 1.5; margin: 0 0 20px; padding: 12px 14px; }
 .notice.success { background: #e9f5ec; color: #24683d; }
 .notice.error { background: #f8eae7; color: #8e2922; }

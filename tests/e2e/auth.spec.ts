@@ -10,6 +10,7 @@ test.skip(!isolated, "Set TEST_DATABASE_URL to an isolated, migrated test databa
 test("sign-up, sign-out, sign-in, recovery confirmation, and one-time reset", async ({ page }) => {
   test.setTimeout(60_000);
   const db = new PrismaClient({ adapter: new PrismaPg({ connectionString: testDatabaseUrl! }) });
+  await db.emailVerificationToken.deleteMany();
   await db.passwordResetToken.deleteMany();
   await db.user.deleteMany();
 
@@ -31,6 +32,37 @@ test("sign-up, sign-out, sign-in, recovery confirmation, and one-time reset", as
   );
   expect(invalidFields).toEqual([]);
   await page.getByRole("button", { name: "Create account" }).click();
+  await expect(page).toHaveURL(/\/verify-email\/pending/);
+  await expect(page.getByText("Check your email to verify your account before signing in.")).toBeVisible();
+
+  const user = await db.user.findUniqueOrThrow({ where: { email } });
+  expect(user.emailVerifiedAt).toBeNull();
+  await page.getByRole("link", { name: "Back to sign in" }).click();
+  await page.getByLabel("Email").fill(email);
+  await page.getByLabel("Password").fill(originalPassword);
+  await page.getByRole("button", { name: "Sign in" }).click();
+  await expect(page.getByText("Invalid email or password.")).toBeVisible();
+
+  const verificationRaw = randomBytes(32).toString("base64url");
+  const verificationHash = createHash("sha256").update(verificationRaw, "utf8").digest("hex");
+  await db.emailVerificationToken.updateMany({
+    where: { userId: user.id, usedAt: null },
+    data: { usedAt: new Date() },
+  });
+  await db.emailVerificationToken.create({
+    data: {
+      userId: user.id,
+      tokenHash: verificationHash,
+      expiresAt: new Date(Date.now() + 60_000),
+    },
+  });
+  await page.goto(`/verify-email?token=${verificationRaw}`);
+  expect((await db.user.findUniqueOrThrow({ where: { id: user.id } })).emailVerifiedAt).toBeNull();
+  await page.getByRole("button", { name: "Verify email" }).click();
+  await expect(page.getByText("Your email has been verified. Sign in to continue.")).toBeVisible();
+  await page.getByLabel("Email").fill(email);
+  await page.getByLabel("Password").fill(originalPassword);
+  await page.getByRole("button", { name: "Sign in" }).click();
   await expect(page).toHaveURL("http://127.0.0.1:3000/");
   await expect(page.getByText(email)).toBeVisible();
 
@@ -54,7 +86,6 @@ test("sign-up, sign-out, sign-in, recovery confirmation, and one-time reset", as
   await page.getByRole("button", { name: "Send reset link" }).click();
   await expect(page.getByText("If an account exists for that email, we sent a password reset link.")).toBeVisible();
 
-  const user = await db.user.findUniqueOrThrow({ where: { email } });
   const rawToken = randomBytes(32).toString("base64url");
   const tokenHash = createHash("sha256").update(rawToken, "utf8").digest("hex");
   await db.passwordResetToken.create({ data: { userId: user.id, tokenHash, expiresAt: new Date(Date.now() + 60_000) } });

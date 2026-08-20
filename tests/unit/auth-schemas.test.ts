@@ -3,15 +3,18 @@ import {
   forgotPasswordSchema,
   normalizeEmail,
   registrationSchema,
+  resendVerificationSchema,
   resetPasswordSchema,
   safeReturnTo,
   signInSchema,
+  verifyEmailSchema,
 } from "@/lib/auth-schemas";
 
 describe("auth schemas", () => {
   it("normalizes email consistently", () => {
     expect(normalizeEmail("  Person@Example.COM ")).toBe("person@example.com");
     expect(forgotPasswordSchema.parse({ email: " A@EXAMPLE.com " }).email).toBe("a@example.com");
+    expect(resendVerificationSchema.parse({ email: " A@EXAMPLE.com " }).email).toBe("a@example.com");
   });
 
   it("enforces password length without transforming the password", () => {
@@ -33,6 +36,8 @@ describe("auth schemas", () => {
     expect(forgotPasswordSchema.safeParse({ email: "not-an-email" }).success).toBe(false);
     expect(resetPasswordSchema.safeParse({ token: "not-a-token", password: "a strong password", confirmPassword: "a strong password" }).success).toBe(false);
     expect(resetPasswordSchema.safeParse({ token: "a".repeat(43), password: "a strong password", confirmPassword: "different value" }).success).toBe(false);
+    expect(verifyEmailSchema.safeParse({ token: "a".repeat(43) }).success).toBe(true);
+    expect(verifyEmailSchema.safeParse({ token: `${"a".repeat(43)}=` }).success).toBe(false);
   });
 });
 

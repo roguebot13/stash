@@ -31,7 +31,9 @@ const authorizationServerMetadataSchema = z
 const jwksSchema = z.object({ keys: z.array(z.record(z.string(), z.unknown())).max(100) }).strict();
 
 type FetchLike = typeof fetch;
-type UserVersionLookup = (id: string) => Promise<{ id: string; sessionVersion: number } | null>;
+type UserVersionLookup = (
+  id: string,
+) => Promise<{ id: string; sessionVersion: number; emailVerifiedAt: Date | null } | null>;
 
 type CacheEntry<T> = { value: T; expiresAt: number };
 
@@ -151,7 +153,10 @@ export class McpJwtTokenVerifier implements OAuthTokenVerifier {
       options.findUserVersion ??
       (async (id) => {
         const { prisma } = await import("@/lib/prisma");
-        return prisma.user.findUnique({ where: { id }, select: { id: true, sessionVersion: true } });
+        return prisma.user.findUnique({
+          where: { id },
+          select: { id: true, sessionVersion: true, emailVerifiedAt: true },
+        });
       });
   }
 
@@ -261,7 +266,11 @@ export class McpJwtTokenVerifier implements OAuthTokenVerifier {
       if (!Number.isInteger(claims.stash_session_version)) throw new McpInvalidTokenError();
 
       const user = await this.findUserVersion(claims.sub);
-      if (!user || user.sessionVersion !== claims.stash_session_version) throw new McpInvalidTokenError();
+      if (
+        !user ||
+        !user.emailVerifiedAt ||
+        user.sessionVersion !== claims.stash_session_version
+      ) throw new McpInvalidTokenError();
 
       return {
         token,

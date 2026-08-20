@@ -38,7 +38,8 @@ describe("MCP JWT access-token verifier", () => {
       resource,
       fetchImpl: fetchImpl as typeof fetch,
       now: () => nowSeconds * 1000,
-      findUserVersion: async (id) => (id === "alice" ? { id, sessionVersion: userVersion } : null),
+      findUserVersion: async (id) =>
+        id === "alice" ? { id, sessionVersion: userVersion, emailVerifiedAt: new Date() } : null,
     });
   }
 
@@ -89,6 +90,17 @@ describe("MCP JWT access-token verifier", () => {
     await expect(verifier().verifyAccessToken(await token({ sub: "missing" }))).rejects.toBeInstanceOf(
       McpInvalidTokenError,
     );
+  });
+
+  it("rejects a pending local account", async () => {
+    const pending = new McpJwtTokenVerifier({
+      issuer,
+      resource,
+      fetchImpl: fetchImpl as typeof fetch,
+      now: () => nowSeconds * 1000,
+      findUserVersion: async (id) => ({ id, sessionVersion: 3, emailVerifiedAt: null }),
+    });
+    await expect(pending.verifyAccessToken(await token())).rejects.toBeInstanceOf(McpInvalidTokenError);
   });
 
   it("rejects access-token lifetimes over 60 minutes", async () => {

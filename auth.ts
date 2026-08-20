@@ -44,7 +44,12 @@ export const { handlers, auth, signIn, signOut } = NextAuth(async () => {
 
           const user = await prisma.user.findUnique({
             where: { email: parsed.data.email },
-            select: { id: true, passwordHash: true, sessionVersion: true },
+            select: {
+              id: true,
+              passwordHash: true,
+              emailVerifiedAt: true,
+              sessionVersion: true,
+            },
           });
 
           if (!user) {
@@ -55,6 +60,11 @@ export const { handlers, auth, signIn, signOut } = NextAuth(async () => {
 
           if (!(await verifyPassword(parsed.data.password, user.passwordHash))) {
             console.info(JSON.stringify({ event: "sign_in.failed", category: "invalid_credentials" }));
+            return null;
+          }
+
+          if (!user.emailVerifiedAt) {
+            console.info(JSON.stringify({ event: "sign_in.failed", category: "inactive_account" }));
             return null;
           }
 

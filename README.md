@@ -10,7 +10,7 @@ Stash is a Next.js App Router application with first-party email/password authen
 4. Set `APP_URL` to the trusted public origin, normally `http://localhost:3000` locally. Production must use HTTPS.
 5. Configure `EMAIL_FROM` with a sender on a domain verified in Resend.
 6. Set `MCP_AUTH_ISSUER` to the exact trusted OAuth authorization-server issuer. Local development may use loopback HTTP; production issuers must use HTTPS and may not contain a query or fragment.
-7. Apply migrations with `pnpm prisma migrate dev`. The committed migrations create the authentication and bookmark tables.
+7. Apply migrations with `pnpm prisma migrate dev`. The committed migrations create authentication, email-verification, and bookmark tables. The email-verification migration marks every account that predates the feature as verified; it deliberately leaves no default on `email_verified_at`, so new accounts start pending.
 8. Create a Vercel AI Gateway key, set `AI_GATEWAY_API_KEY`, and set `AI_MODEL` to a Gateway model that supports tool calls (the example uses `openai/gpt-5.4-mini`).
 9. Start the application with `pnpm dev`.
 
@@ -18,11 +18,15 @@ The server validates `DATABASE_URL`, `RESEND_API_KEY`, `AUTH_SECRET`, `APP_URL`,
 
 ## Authentication behavior
 
-- `/signup` creates a credentials user, sends a best-effort welcome email, and signs the user in.
+- `/signup` creates a pending credentials user and sends a one-time verification link. It does not create a session or send the welcome email.
+- `/verify-email` activates a pending account only after a POST-backed confirmation. Verification links are SHA-256-hashed at rest, single-use, and expire after 24 hours.
+- `/verify-email/resend` always returns an account-enumeration-resistant response. Pending accounts have a database-backed 60-second replacement cooldown, and issuing a replacement invalidates older links.
 - `/login` creates a seven-day encrypted, HTTP-only Auth.js cookie session.
 - `/forgot-password` always returns an account-enumeration-resistant response for valid email syntax.
 - `/reset-password` consumes a SHA-256-hashed, 60-minute, single-use token and revokes older sessions by incrementing the user's session version.
-- `/` authorizes against the current database record through the DAL before rendering.
+- `/` authorizes against the current database record through the DAL before rendering. Credentials sessions, web/API access, the local development authorization server, and remote MCP bearer-token mapping all require a verified account.
+
+The welcome email is sent on the first successful email-verification transition and remains best effort. Password-reset mail is issued only for verified accounts and never changes verification status.
 
 `lib/rate-limit.ts` is the extension point for a future shared IP/email limiter. The database-backed 60-second per-account cooldown is not a complete production abuse-control system by itself.
 
@@ -48,7 +52,7 @@ For local remote-client testing, configure a loopback authorization server, set 
 Stash includes a development-only loopback authorization server. It signs short-lived access tokens, authenticates against the existing Stash `users` table, binds tokens to the user's current `session_version`, and keeps authorization codes and refresh tokens only in memory. Its signing key and all grants are discarded when the process stops.
 
 1. Use the local values from `.env.example`: `APP_URL=http://localhost:3000`, `MCP_AUTH_ISSUER=http://localhost:4000`, and the identical `LOCAL_AUTH_ISSUER=http://localhost:4000`. Keep the issuer string exactly identical, including any trailing slash.
-2. Apply the database migrations and create a Stash account through `/signup` if you do not already have one.
+2. Apply the database migrations, create a Stash account through `/signup` if you do not already have one, and complete email verification before connecting a client.
 3. In one terminal, run Stash with `pnpm dev`. In a second terminal, run the authorization server with `pnpm dev:auth`.
 4. Configure the AI client with the MCP server URL `http://localhost:3000/api/mcp`. A conforming client follows Stash's 401 challenge and discovers the authorization server automatically.
 5. At the local consent page, sign in with the same Stash email and password and approve the requested scopes.
@@ -77,7 +81,9 @@ Normal automated tests mock the model and MCP client and do not spend Gateway to
 
 ## Email development
 
-Automated tests mock Resend and never call its API. To preview templates without sending mail, render the exported React components in `emails/` with a local React email preview tool or a private development-only harness. Do not add a public `/api/send` endpoint. For end-to-end email tests, use a separate Resend test key/sender and inbox; never use production recipients.
+Automated tests mock Resend and never call its API. `AUTH_TEST_MAIL_MODE=disabled` makes the existing test harness accept email sends without external delivery; browser tests inject a known raw token only into an isolated test database. To preview templates without sending mail, render the exported React components in `emails/` with a local React email preview tool or a private development-only harness. Do not add a public `/api/send` endpoint. For end-to-end email tests, use a separate Resend test key/sender and inbox; never use production recipients.
+
+Verification and password-reset links are built only from `APP_URL`. Production must use HTTPS and a Resend-verified `EMAIL_FROM` domain. Configure request logs and error monitoring to redact the `token` query parameter; never capture full verification or reset URLs.
 
 ## Verification
 

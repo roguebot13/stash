@@ -7,24 +7,31 @@ import { signIn, signOut } from "@/auth";
 import {
   forgotPasswordSchema,
   registrationSchema,
+  resendVerificationSchema,
   resetPasswordSchema,
   safeReturnTo,
   signInSchema,
+  verifyEmailSchema,
 } from "@/lib/auth-schemas";
 import type { AuthActionState } from "@/lib/auth-state";
 import {
+  consumeEmailVerificationToken,
   consumeResetToken,
-  createCredentialsUser,
+  createPendingCredentialsUser,
+  GENERIC_VERIFICATION_REQUEST_MESSAGE,
   GENERIC_RESET_REQUEST_MESSAGE,
+  INVALID_VERIFICATION_TOKEN_MESSAGE,
   INVALID_RESET_TOKEN_MESSAGE,
+  invalidateEmailVerificationToken,
   isUniqueConstraintError,
+  requestEmailVerification,
   requestPasswordReset,
 } from "@/lib/auth-service";
-import { sendWelcomeEmail } from "@/lib/mail";
+import { sendVerificationEmail, sendWelcomeEmail } from "@/lib/mail";
 
 const INVALID_LOGIN_MESSAGE = "Invalid email or password.";
 const GENERIC_REGISTRATION_MESSAGE =
-  "Unable to create an account with those details. Try signing in or resetting your password.";
+  "Unable to create an account with those details. Try signing in, resending verification, or resetting your password.";
 
 function formValue(formData: FormData, name: string) {
   const value = formData.get(name);
@@ -57,9 +64,13 @@ export async function signupAction(_previous: AuthActionState, formData: FormDat
   });
   if (!parsed.success) return { status: "error", values: { email: emailValue }, errors: parsed.error.flatten().fieldErrors };
 
-  let user: { id: string; email: string };
+  let registration: {
+    user: { id: string; email: string };
+    tokenId: string;
+    rawToken: string;
+  };
   try {
-    user = await createCredentialsUser(parsed.data.email, parsed.data.password);
+    registration = await createPendingCredentialsUser(parsed.data.email, parsed.data.password);
   } catch (error) {
     if (isUniqueConstraintError(error)) {
       console.info(JSON.stringify({ event: "registration.failed", category: "duplicate_or_invalid" }));
@@ -69,15 +80,95 @@ export async function signupAction(_previous: AuthActionState, formData: FormDat
     return { status: "error", message: "We could not create your account. Please try again.", values: { email: emailValue } };
   }
 
-  console.info(JSON.stringify({ event: "registration.succeeded", userId: user.id }));
-  try { await sendWelcomeEmail(user.email, user.id); } catch { /* best effort; helper logs safely */ }
+  console.info(JSON.stringify({ event: "registration.succeeded", userId: registration.user.id }));
   try {
-    await signIn("credentials", { email: parsed.data.email, password: parsed.data.password, redirectTo: "/" });
-  } catch (error) {
-    if (error instanceof AuthError) return { status: "error", message: "Your account was created. Sign in to continue.", values: { email: emailValue } };
-    throw error;
+    await sendVerificationEmail(
+      registration.user.email,
+      registration.rawToken,
+      registration.tokenId,
+    );
+  } catch {
+    try {
+      await invalidateEmailVerificationToken(registration.tokenId);
+    } catch {
+      console.error(
+        JSON.stringify({
+          event: "email_verification.token_invalidation_failed",
+          category: "internal",
+          tokenId: registration.tokenId,
+        }),
+      );
+    }
+    return {
+      status: "error",
+      message:
+        "Your account was created, but we could not send the verification email. Request a new link to continue.",
+    };
   }
-  return { status: "success" };
+  console.info(
+    JSON.stringify({
+      event: "email_verification.issued",
+      userId: registration.user.id,
+      tokenId: registration.tokenId,
+    }),
+  );
+  redirect("/verify-email/pending");
+}
+
+export async function resendVerificationAction(
+  _previous: AuthActionState,
+  formData: FormData,
+): Promise<AuthActionState> {
+  const emailValue = formValue(formData, "email");
+  const parsed = resendVerificationSchema.safeParse({ email: emailValue });
+  if (!parsed.success) {
+    return {
+      status: "error",
+      values: { email: emailValue },
+      errors: parsed.error.flatten().fieldErrors,
+    };
+  }
+  try {
+    await requestEmailVerification(parsed.data.email);
+  } catch {
+    console.error(
+      JSON.stringify({ event: "email_verification.request_failed", category: "internal" }),
+    );
+  }
+  return { status: "success", message: GENERIC_VERIFICATION_REQUEST_MESSAGE };
+}
+
+export async function verifyEmailAction(
+  _previous: AuthActionState,
+  formData: FormData,
+): Promise<AuthActionState> {
+  const parsed = verifyEmailSchema.safeParse({ token: formValue(formData, "token") });
+  if (!parsed.success) return { status: "error", message: INVALID_VERIFICATION_TOKEN_MESSAGE };
+
+  let user: { id: string; email: string } | null;
+  try {
+    user = await consumeEmailVerificationToken(parsed.data.token);
+  } catch {
+    console.error(JSON.stringify({ event: "email_verification.failed", category: "internal" }));
+    return { status: "error", message: "We could not verify your email. Please try again." };
+  }
+  if (!user) {
+    console.info(
+      JSON.stringify({
+        event: "email_verification.token_rejected",
+        category: "invalid_or_expired",
+      }),
+    );
+    return { status: "error", message: INVALID_VERIFICATION_TOKEN_MESSAGE };
+  }
+
+  console.info(JSON.stringify({ event: "email_verification.succeeded", userId: user.id }));
+  try {
+    await sendWelcomeEmail(user.email, user.id);
+  } catch {
+    // Welcome delivery is best effort and the mail helper logs a sanitized error.
+  }
+  redirect("/login?verified=success");
 }
 
 export async function forgotPasswordAction(_previous: AuthActionState, formData: FormData): Promise<AuthActionState> {

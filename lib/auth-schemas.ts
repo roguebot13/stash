@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import { passwordByteLength } from "@/lib/password";
+import { EMAIL_VERIFICATION_TOKEN_PATTERN } from "@/lib/email-verification-token";
 import { RESET_TOKEN_PATTERN } from "@/lib/reset-token";
 
 export const normalizeEmail = (email: string) => email.trim().toLowerCase();
@@ -38,6 +39,12 @@ export const registrationSchema = z
   });
 
 export const forgotPasswordSchema = z.object({ email: emailSchema });
+
+export const resendVerificationSchema = z.object({ email: emailSchema });
+
+export const verifyEmailSchema = z.object({
+  token: z.string().regex(EMAIL_VERIFICATION_TOKEN_PATTERN),
+});
 
 export const resetPasswordSchema = z
   .object({

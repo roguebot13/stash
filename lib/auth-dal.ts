@@ -13,10 +13,14 @@ export async function getCurrentUser(): Promise<SafeUser | null> {
 
   const user = await prisma.user.findUnique({
     where: { id: session.user.id },
-    select: { id: true, email: true, sessionVersion: true },
+    select: { id: true, email: true, emailVerifiedAt: true, sessionVersion: true },
   });
 
-  if (!user || user.sessionVersion !== session.user.sessionVersion) return null;
+  if (
+    !user ||
+    !user.emailVerifiedAt ||
+    user.sessionVersion !== session.user.sessionVersion
+  ) return null;
   return { id: user.id, email: user.email };
 }
 

@@ -347,7 +347,7 @@ function redirect(response, location) {
 
 async function findUserByEmail(email) {
   const result = await pool.query(
-    'SELECT "id", "email", "password_hash", "session_version" FROM "users" WHERE "email" = $1 LIMIT 1',
+    'SELECT "id", "email", "password_hash", "email_verified_at", "session_version" FROM "users" WHERE "email" = $1 LIMIT 1',
     [email.trim().toLowerCase()],
   );
   return result.rows[0] ?? null;
@@ -355,7 +355,7 @@ async function findUserByEmail(email) {
 
 async function findUserById(id) {
   const result = await pool.query(
-    'SELECT "id", "session_version" FROM "users" WHERE "id" = $1 LIMIT 1',
+    'SELECT "id", "email_verified_at", "session_version" FROM "users" WHERE "id" = $1 LIMIT 1',
     [id],
   );
   return result.rows[0] ?? null;
@@ -380,7 +380,7 @@ async function issueAccessToken({ userId, sessionVersion, clientId, scopes }) {
 
 async function tokenResult(grant, includeRefreshToken) {
   const user = await findUserById(grant.userId);
-  if (!user || user.session_version !== grant.sessionVersion) {
+  if (!user || !user.email_verified_at || user.session_version !== grant.sessionVersion) {
     throw new OAuthRequestError(400, "invalid_grant", "User authorization is no longer valid");
   }
   const result = {
@@ -492,7 +492,7 @@ async function handleAuthorizationDecision(request, response) {
   const passwordHash = user?.password_hash ?? DUMMY_PASSWORD_HASH;
   const passwordWithinLimit = Buffer.byteLength(password, "utf8") <= 72;
   const passwordValid = await bcrypt.compare(passwordWithinLimit ? password : "", passwordHash);
-  if (!user || !passwordWithinLimit || !passwordValid) {
+  if (!user || !user.email_verified_at || !passwordWithinLimit || !passwordValid) {
     sendHtml(response, 401, "Sign-in failed", `<h1>Sign-in failed</h1><p class="error">Invalid email or password.</p><p>Return to your AI client and try connecting again.</p>`);
     return;
   }

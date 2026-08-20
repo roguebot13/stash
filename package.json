@@ -6,6 +6,8 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build --webpack",
+    "dev:auth": "node scripts/local-auth-server.mjs",
+    "prestart": "prisma migrate deploy",
     "start": "next start",
     "lint": "eslint",
     "test": "vitest run",

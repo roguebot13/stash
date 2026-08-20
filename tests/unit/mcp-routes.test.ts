@@ -71,6 +71,28 @@ function mcpRequest(options?: {
   });
 }
 
+function legacyInitializeRequest(authorization: string) {
+  return new Request("https://stash.example/api/mcp", {
+    method: "POST",
+    headers: {
+      host: "stash.example",
+      authorization,
+      Accept: "application/json, text/event-stream",
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      jsonrpc: "2.0",
+      id: 1,
+      method: "initialize",
+      params: {
+        protocolVersion: "2025-06-18",
+        capabilities: {},
+        clientInfo: { name: "desktop-test-client", version: "1.0.0" },
+      },
+    }),
+  });
+}
+
 function bearer(scopes: string[]): AuthInfo {
   return {
     token: "fixture-token",
@@ -144,6 +166,19 @@ describe("MCP routes", () => {
     expect(addResponse.status).toBe(403);
     expect(addResponse.headers.get("www-authenticate")).toContain('error="insufficient_scope"');
     expect(addResponse.headers.get("www-authenticate")).toContain('scope="bookmarks:write"');
+  });
+
+  it("accepts the stateless 2025 Streamable HTTP handshake used by desktop clients", async () => {
+    mocks.verifyAccessToken.mockResolvedValue(bearer(["bookmarks:read"]));
+
+    const response = await POST(legacyInitializeRequest("Bearer fixture-token"));
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toContain("text/event-stream");
+    expect(response.headers.get("mcp-session-id")).toBeNull();
+    const body = await response.text();
+    expect(body).toContain('"protocolVersion":"2025-06-18"');
+    expect(body).toContain('"serverInfo":{"name":"stash-bookmarks"');
   });
 
   it("does not treat a longer unknown scope as the required read scope", async () => {

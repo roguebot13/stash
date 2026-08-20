@@ -11,9 +11,10 @@ Stash is a Next.js App Router application with first-party email/password authen
 5. Configure `EMAIL_FROM` with a sender on a domain verified in Resend.
 6. Set `MCP_AUTH_ISSUER` to the exact trusted OAuth authorization-server issuer. Local development may use loopback HTTP; production issuers must use HTTPS and may not contain a query or fragment.
 7. Apply migrations with `pnpm prisma migrate dev`. The committed migrations create the authentication and bookmark tables.
-8. Start the application with `pnpm dev`.
+8. Create a Vercel AI Gateway key, set `AI_GATEWAY_API_KEY`, and set `AI_MODEL` to a Gateway model that supports tool calls (the example uses `openai/gpt-5.4-mini`).
+9. Start the application with `pnpm dev`.
 
-The server validates `DATABASE_URL`, `RESEND_API_KEY`, `AUTH_SECRET`, `APP_URL`, `MCP_AUTH_ISSUER`, and `EMAIL_FROM` and reports invalid variable names without printing their values.
+The server validates `DATABASE_URL`, `RESEND_API_KEY`, `AUTH_SECRET`, `APP_URL`, `MCP_AUTH_ISSUER`, `EMAIL_FROM`, `AI_GATEWAY_API_KEY`, and `AI_MODEL` at their first relevant use and reports invalid variable names without printing their values.
 
 ## Authentication behavior
 
@@ -27,7 +28,7 @@ The server validates `DATABASE_URL`, `RESEND_API_KEY`, `AUTH_SECRET`, `APP_URL`,
 
 ## Bookmarks MCP
 
-The stateless, modern-only MCP endpoint is `POST /api/mcp`. Its canonical RFC 8707 resource identifier and access-token audience are always `${APP_URL}/api/mcp`. Public RFC 9728 discovery is available at `/.well-known/oauth-protected-resource/api/mcp`; Stash does not serve authorization, token, registration, revocation, or JWKS endpoints.
+The MCP endpoint is stateless Streamable HTTP at `POST /api/mcp`. It serves the current protocol and the SDK's stateless 2025 compatibility handshake for desktop clients; it does not expose the legacy two-endpoint SSE transport. Its canonical RFC 8707 resource identifier and access-token audience are always `${APP_URL}/api/mcp`. Public RFC 9728 discovery is available at `/.well-known/oauth-protected-resource/api/mcp`; Stash does not serve authorization, token, registration, revocation, or JWKS endpoints.
 
 The endpoint exposes exactly four tools:
 
@@ -41,6 +42,38 @@ Stash is only an OAuth 2.1 protected resource. The separately operated authoriza
 Access tokens must be short-lived JWT access tokens with protected-header `typ: at+jwt` and a `kid`. Required claims are exact `iss`, exact single-resource `aud`, local Stash user ID in `sub`, `exp`, `iat`, space-delimited `scope`, `client_id` (or `azp`), and integer `stash_session_version`. The authorization server must mint that version from the current Stash user row and keep token lifetime at or below 60 minutes. It must never put email addresses in `sub` or expect Stash to provision users from tokens.
 
 For local remote-client testing, configure a loopback authorization server, set `MCP_AUTH_ISSUER` to its issuer, pre-register the client (or use a Client ID Metadata Document), request the exact `${APP_URL}/api/mcp` resource plus the least bookmark scopes, and send only the resulting access token to Stash. Refresh tokens go only to the authorization server.
+
+### Local authorization server for AI clients
+
+Stash includes a development-only loopback authorization server. It signs short-lived access tokens, authenticates against the existing Stash `users` table, binds tokens to the user's current `session_version`, and keeps authorization codes and refresh tokens only in memory. Its signing key and all grants are discarded when the process stops.
+
+1. Use the local values from `.env.example`: `APP_URL=http://localhost:3000`, `MCP_AUTH_ISSUER=http://localhost:4000`, and the identical `LOCAL_AUTH_ISSUER=http://localhost:4000`. Keep the issuer string exactly identical, including any trailing slash.
+2. Apply the database migrations and create a Stash account through `/signup` if you do not already have one.
+3. In one terminal, run Stash with `pnpm dev`. In a second terminal, run the authorization server with `pnpm dev:auth`.
+4. Configure the AI client with the MCP server URL `http://localhost:3000/api/mcp`. A conforming client follows Stash's 401 challenge and discovers the authorization server automatically.
+5. At the local consent page, sign in with the same Stash email and password and approve the requested scopes.
+
+Ask for `bookmarks:read` when the client only needs to list or search. Add `bookmarks:write` only when it needs to add or delete. The authorization and token requests must both contain the exact `resource=http://localhost:3000/api/mcp`; the local server rejects missing, altered, or additional resource values.
+
+Public clients can be pre-registered in `.env` as JSON (there is no client secret):
+
+```dotenv
+LOCAL_AUTH_CLIENTS_JSON='[{"client_id":"my-ai-client","client_name":"My AI client","redirect_uris":["http://127.0.0.1:8765/oauth/callback"],"token_endpoint_auth_method":"none"}]'
+```
+
+The server also accepts an HTTPS (or loopback HTTP) Client ID Metadata Document URL as `client_id`. Pre-registration and metadata documents are the default. For a legacy client that still requires dynamic client registration, set `LOCAL_AUTH_ALLOW_DCR=true` to advertise a local `/register` compatibility endpoint. Restarting the server clears dynamically registered clients, so reconnect or clear that client's cached OAuth registration after a restart.
+
+The token endpoint supports authorization code with PKCE `S256` and rotating refresh tokens. AI clients send access tokens only to `http://localhost:3000/api/mcp`; they send authorization codes and refresh tokens only to `http://localhost:4000/token`. The local server is intentionally bound to `127.0.0.1`, uses ephemeral keys and in-memory grants, and must not be deployed or exposed to a network. For a client running in a VM or container, use a deliberate host bridge and TLS-capable development authorization server instead of changing this server to listen publicly.
+
+## AI chat
+
+The authenticated home page is an ephemeral, streaming chat powered by Vercel AI SDK and AI Gateway. The browser sends AI SDK UI messages to `POST /api/chat`; that server route authenticates the user, opens a request-scoped Streamable HTTP connection to the canonical `${APP_URL}/api/mcp` endpoint, and loads only the four schema-bound bookmark tools.
+
+The assistant can add, list, search, and delete bookmarks. Delete calls use signed AI SDK approval requests and never reach MCP until the user explicitly approves the exact operation. The model is limited to six tool/model steps and the route enforces same-origin checks, a 256 KiB body limit, message/text bounds, safe public errors, no-store responses, and content-free operational logs.
+
+Conversation messages are kept only in browser memory. Refreshing or choosing New chat clears the conversation but does not undo bookmark changes. Stop cancels the active provider request; stream resumption is intentionally disabled. `checkChatRateLimit()` in `lib/rate-limit.ts` is the extension point for a production shared request, concurrency, and token limiter.
+
+Normal automated tests mock the model and MCP client and do not spend Gateway tokens. A manual live smoke test requires a non-production Gateway key and isolated user data: sign in, list bookmarks, add one, request deletion, confirm it remains before approval, then approve or deny the operation.
 
 ## Email development
 

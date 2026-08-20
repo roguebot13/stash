@@ -62,9 +62,9 @@ This specification is for an implementation agent. Implement the schema change, 
 
 ### 4.1 Protocol and package
 
-- Use the stable v2 `@modelcontextprotocol/server` package and the MCP protocol revision `2026-07-28`. Do not add the legacy monolithic `@modelcontextprotocol/sdk` package.
+- Use the stable v2 `@modelcontextprotocol/server` package and the MCP protocol revision `2026-07-28`, with the same package's stateless 2025 Streamable HTTP compatibility path for deployed desktop clients. Do not add the legacy monolithic `@modelcontextprotocol/sdk` package or the two-endpoint legacy SSE transport.
 - Use `McpServer` and the web-standard `createMcpHandler` entry point. Reuse the repository's Zod 4 dependency for schemas.
-- Configure `createMcpHandler` with `legacy: "reject"` and `responseMode: "json"`. This feature needs no connection session, resumability, progress messages, or SSE stream.
+- Configure `createMcpHandler` with `legacy: "stateless"` and `responseMode: "json"`. The compatibility leg may encode a POST response as SSE, but this feature needs no connection session, resumability, standalone GET stream, progress messages, or two-endpoint legacy SSE transport.
 - Name the server `stash-bookmarks` and use the application version as its server version.
 - Register the four tools in the deterministic order shown in section 1. Do not advertise tool-list change notifications because the catalog is static.
 - Provide both `outputSchema` and `structuredContent` for successful tool calls. Also include a text content block containing the JSON serialization of the same result for client compatibility.
@@ -188,7 +188,7 @@ if (authentication instanceof Response) return authentication;
 
 const handler = createMcpHandler(
   () => createBookmarkMcpServer(authentication.principal),
-  { legacy: "reject", responseMode: "json" },
+  { legacy: "stateless", responseMode: "json" },
 );
 
 return handler.fetch(request, {
@@ -664,7 +664,7 @@ Use at least two users, Alice and Bob:
 - The protected-resource metadata route is public, has wildcard read-only CORS and short public caching, and returns no user-specific data.
 - Authenticated `server/discover`/`tools/list` behavior advertises the tool capability and exactly the four tools in deterministic order.
 - Each tool has the expected input schema, output schema, description, and annotations.
-- Modern `2026-07-28` requests with valid MCP headers work; legacy initialization/session requests are rejected.
+- Modern `2026-07-28` requests with valid MCP headers work; stateless 2025 Streamable HTTP initialization also works, while legacy GET/session operations remain unsupported.
 - Header/body method or tool-name mismatches and unsupported content types are rejected by the SDK.
 - Tool success returns matching `structuredContent` and JSON text content.
 - Every `/api/mcp` response has `Cache-Control: no-store`; the separate public metadata route has only the short public cache policy specified in section 4.3.
@@ -691,7 +691,7 @@ pnpm build
 5. Implement shared normalization schemas, cursor handling, and public DTO mapping with unit tests.
 6. Implement the ownership-scoped bookmark DAL and two-user integration tests.
 7. Register the four tools, output schemas, annotations, structured/text results, and defense-in-depth scope assertions.
-8. Add the `/api/mcp` Route Handler with host/origin guards, bearer-or-cookie authentication before parsing, exact per-operation scope checks, caller binding, modern-only stateless transport, and no-store responses.
+8. Add the `/api/mcp` Route Handler with host/origin guards, bearer-or-cookie authentication before parsing, exact per-operation scope checks, caller binding, current plus stateless 2025 Streamable HTTP transport, and no-store responses.
 9. Add route/protocol/OAuth tests, update `.env.example` and README with local issuer/client setup, and run the full verification suite.
 
 ## 15. Definition of done

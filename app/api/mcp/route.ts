@@ -101,7 +101,10 @@ export async function POST(request: Request) {
   }
 
   const handler = createMcpHandler(() => createBookmarkMcpServer(authentication), {
-    legacy: "reject",
+    // Current desktop clients still commonly initialize with a 2025 MCP
+    // revision. Serve that handshake through the SDK's stateless Streamable
+    // HTTP compatibility path so clients do not fall back to legacy SSE.
+    legacy: "stateless",
     responseMode: "json",
     onerror(error) {
       console.error(JSON.stringify({ event: "mcp.request.failed", category: error.name || "unknown" }));

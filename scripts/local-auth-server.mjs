@@ -212,7 +212,10 @@ function htmlEscape(value) {
 function baseHeaders(extra = {}) {
   return {
     "Cache-Control": "no-store",
-    "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'",
+    // Some desktop OAuth webviews add their own `form-action 'self'` policy and
+    // combine it with response CSP. Do not add a second form policy here. The
+    // only form target is the validated, hard-coded loopback issuer below.
+    "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; frame-ancestors 'none'; base-uri 'none'",
     "Referrer-Policy": "no-referrer",
     "X-Content-Type-Options": "nosniff",
     ...extra,
@@ -443,7 +446,7 @@ async function handleAuthorization(requestUrl, response) {
     sendHtml(response, 200, "Authorize Stash", `<h1>Authorize Stash</h1>
 <p><strong>${htmlEscape(client.clientName)}</strong> is requesting access to <code>${htmlEscape(resource)}</code>.</p>
 <ul>${scopes.map((scope) => `<li>${htmlEscape(scope)}</li>`).join("")}</ul>
-<form method="post" action="/authorize"><input type="hidden" name="transaction" value="${transactionId}">
+<form method="post" action="${htmlEscape(endpoint("/authorize"))}"><input type="hidden" name="transaction" value="${transactionId}">
 <label for="email">Stash email</label><input id="email" name="email" type="email" maxlength="320" autocomplete="username" required>
 <label for="password">Stash password</label><input id="password" name="password" type="password" maxlength="72" autocomplete="current-password" required>
 <button name="decision" value="allow" type="submit">Sign in and authorize</button><button class="secondary" name="decision" value="deny" type="submit">Deny</button></form>`);

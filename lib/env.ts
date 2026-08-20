@@ -42,9 +42,15 @@ const serverEnvSchema = z.object({
   EMAIL_FROM: z.string().min(3),
 });
 
+const aiEnvSchema = z.object({
+  AI_GATEWAY_API_KEY: z.string().min(1),
+  AI_MODEL: z.string().trim().min(1),
+});
+
 export type ServerEnv = z.infer<typeof serverEnvSchema>;
 
 let cachedEnv: ServerEnv | undefined;
+let cachedAiEnv: z.infer<typeof aiEnvSchema> | undefined;
 
 export function getServerEnv(): ServerEnv {
   if (cachedEnv) return cachedEnv;
@@ -67,6 +73,25 @@ export function getServerEnv(): ServerEnv {
   return cachedEnv;
 }
 
+export function getAiEnv() {
+  if (cachedAiEnv) return cachedAiEnv;
+
+  const result = aiEnvSchema.safeParse({
+    AI_GATEWAY_API_KEY: process.env.AI_GATEWAY_API_KEY,
+    AI_MODEL: process.env.AI_MODEL,
+  });
+  if (!result.success) {
+    const names = Object.keys(result.error.flatten().fieldErrors).join(", ");
+    throw new Error(`Invalid or missing AI environment variable(s): ${names}`);
+  }
+
+  cachedAiEnv = result.data;
+  return cachedAiEnv;
+}
+
 export function resetEnvCacheForTests() {
-  if (process.env.NODE_ENV === "test") cachedEnv = undefined;
+  if (process.env.NODE_ENV === "test") {
+    cachedEnv = undefined;
+    cachedAiEnv = undefined;
+  }
 }

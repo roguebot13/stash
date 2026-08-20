@@ -41,11 +41,11 @@ function normalizedRequestHost(request: Request) {
   }
 }
 
-export function validateMcpRequestHost(request: Request) {
+export function validateAppRequestHost(request: Request) {
   return normalizedRequestHost(request) === getBookmarkMcpConfiguration().trustedHost;
 }
 
-export function validateMcpRequestOrigin(request: Request) {
+export function validateAppRequestOrigin(request: Request) {
   const origin = request.headers.get("origin");
   if (origin === null) return true;
   try {
@@ -54,3 +54,6 @@ export function validateMcpRequestOrigin(request: Request) {
     return false;
   }
 }
+
+export const validateMcpRequestHost = validateAppRequestHost;
+export const validateMcpRequestOrigin = validateAppRequestOrigin;

@@ -18,10 +18,13 @@
     "postinstall": "prisma generate"
   },
   "dependencies": {
+    "@ai-sdk/mcp": "^2.0.34",
+    "@ai-sdk/react": "^4.0.74",
     "@modelcontextprotocol/server": "^2.0.0",
     "@prisma/adapter-pg": "^7.9.1",
     "@prisma/client": "^7.9.1",
     "@react-email/render": "^2.1.0",
+    "ai": "^7.0.71",
     "bcrypt": "^6.0.0",
     "jose": "^6.2.9",
     "next": "16.3.1-canary.25",
@@ -31,6 +34,7 @@
     "react-dom": "19.2.8",
     "resend": "^6.21.0",
     "server-only": "^0.0.1",
+    "streamdown": "^2.5.0",
     "zod": "^4.4.3"
   },
   "devDependencies": {

@@ -18,6 +18,7 @@ export default defineConfig({
       RESEND_API_KEY: "re_test",
       AUTH_SECRET: "x".repeat(64),
       APP_URL: "http://127.0.0.1:3000",
+      MCP_AUTH_ISSUER: "http://127.0.0.1:4000",
       EMAIL_FROM: "Stash <test@example.com>",
       AUTH_TEST_MAIL_MODE: "disabled",
     },

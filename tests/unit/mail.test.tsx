@@ -13,6 +13,7 @@ describe("mail helpers", () => {
     process.env.RESEND_API_KEY = "re_test";
     process.env.AUTH_SECRET = "x".repeat(32);
     process.env.APP_URL = "https://stash.example/";
+    process.env.MCP_AUTH_ISSUER = "https://auth.stash.example";
     process.env.EMAIL_FROM = "Stash <hello@stash.example>";
     delete process.env.AUTH_TEST_MAIL_MODE;
     resetEnvCacheForTests();

@@ -15,8 +15,24 @@ model User {
   createdAt           DateTime             @default(now()) @map("created_at")
   updatedAt           DateTime             @updatedAt @map("updated_at")
   passwordResetTokens PasswordResetToken[]
+  bookmarks           Bookmark[]
 
   @@map("users")
+}
+
+model Bookmark {
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id")
+  url       String   @db.VarChar(2048)
+  title     String   @db.VarChar(500)
+  tags      String[] @default([])
+  notes     String?  @db.Text
+  createdAt DateTime @default(now()) @map("created_at")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, url])
+  @@index([userId, createdAt(sort: Desc), id(sort: Desc)])
+  @@map("bookmarks")
 }
 
 model PasswordResetToken {

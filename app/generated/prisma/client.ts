@@ -47,6 +47,11 @@ export { Prisma }
  */
 export type User = Prisma.UserModel
 /**
+ * Model Bookmark
+ *
+ */
+export type Bookmark = Prisma.BookmarkModel
+/**
  * Model PasswordResetToken
  * 
  */

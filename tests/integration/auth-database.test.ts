@@ -18,6 +18,7 @@ describe.skipIf(!hasIsolatedDatabase)("authentication database flows", () => {
     process.env.RESEND_API_KEY = "re_test";
     process.env.AUTH_SECRET = "x".repeat(32);
     process.env.APP_URL = "http://localhost:3000";
+    process.env.MCP_AUTH_ISSUER = "http://localhost:4000";
     process.env.EMAIL_FROM = "Stash <test@example.com>";
     process.env.AUTH_TEST_MAIL_MODE = "disabled";
     db = new PrismaClient({ adapter: new PrismaPg({ connectionString: testDatabaseUrl! }) });

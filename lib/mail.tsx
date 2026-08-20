@@ -12,7 +12,6 @@ function sanitizeEmailError(error: unknown) {
   if (error && typeof error === "object") {
     const value = error as { name?: unknown; message?: unknown; code?: unknown };
     const rawCode = typeof value.code === "string" ? value.code : typeof value.name === "string" ? value.name : "unknown";
-    console.error(error);
     return {
       code: /^[a-z0-9_-]{1,64}$/i.test(rawCode) ? rawCode : "unknown",
       message: "Email provider rejected the request",
